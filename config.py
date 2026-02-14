@@ -38,7 +38,7 @@ TTS_VOLUME = 1.0
 # If you enable an LLM, put the API key here or in env vars.
 # If you want to use a real LLM, set logic in llm_service.py to use this key.
 USE_LLM = True 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyCFwuXLMe48s51S-1uZyTsj0T5FBxxlExY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 LLM_COOLDOWN = 15.0 # Seconds between LLM calls to avoid Rate Limits (Free Tier)
 
 # Advanced Settings
