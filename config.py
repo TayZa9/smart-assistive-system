@@ -19,7 +19,8 @@ except ImportError:
 # Use integer 0 for webcam, or string URL for IP Camera
 # RTSP Stream URL with Authentication
 # REPLACE 'user' and 'password' with your real camera credentials
-CAMERA_ID = "rtsp://admin:admin@192.168.1.110:8554/live"
+# CAMERA_ID = "rtsp://admin:admin@192.168.1.112:8554/live"
+CAMERA_ID = 0
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 FPS = 30
@@ -38,8 +39,8 @@ TTS_VOLUME = 1.0
 # If you enable an LLM, put the API key here or in env vars.
 # If you want to use a real LLM, set logic in llm_service.py to use this key.
 USE_LLM = True 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyCFwuXLMe48s51S-1uZyTsj0T5FBxxlExY")
-LLM_COOLDOWN = 15.0 # Seconds between LLM calls to avoid Rate Limits (Free Tier)
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+LLM_COOLDOWN = 15.0 # Seconds between LLM calls to avoid Rate Limits
 
 # Advanced Settings
 TARGET_LANGUAGE = "English"

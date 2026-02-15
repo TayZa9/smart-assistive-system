@@ -15,3 +15,9 @@ chroma_db/
 
 # Large files
 *.pt
+
+# Tests
+tests/
+run_app.ps1
+test_audio_thread.py
+trigger_import_error.py
