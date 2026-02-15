@@ -18,6 +18,3 @@ chroma_db/
 
 # Tests
 tests/
-run_app.ps1
-test_audio_thread.py
-trigger_import_error.py
