@@ -4,10 +4,11 @@ import logging
 import threading
 import asyncio
 import json
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from queue import Queue
 
 import config
@@ -129,7 +130,7 @@ def detection_loop():
                     current_detections = detections
                     
                     # Reason and Speak
-                    message = res.process(detections)
+                    message = res.process(detections, frame=frame)
                     if message:
                         print(f"Speaking: {message}")
                         with lock:
@@ -205,5 +206,15 @@ async def get_status():
         "detections": current_detections,
         "fps": int(current_fps),
         "llm_response": latest_llm_response,
+        "llm_response": latest_llm_response,
         "logs": get_recent_logs()
     })
+
+class QuestionRequest(BaseModel):
+    question: str
+
+@app.post("/api/ask")
+async def ask_question(request: QuestionRequest):
+    res = get_reasoner()
+    answer = res.llm.ask(request.question)
+    return {"answer": answer}

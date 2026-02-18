@@ -11,7 +11,7 @@ class SceneReasoner:
         self.cooldown_danger = 3.0  # Repeat dangerous objects more often
         self.last_llm_call = 0.0    # Timestamp of last actual LLM API call
 
-    def process(self, detections):
+    def process(self, detections, frame=None):
         """
         Filters detections and sends to LLMService.
         """
@@ -74,7 +74,7 @@ class SceneReasoner:
         }
         
         # Call LLM
-        response = self.llm.generate_response(json.dumps(metadata))
+        response = self.llm.generate_response(json.dumps(metadata), image_data=frame)
         if response:
             self.last_llm_call = time.time()
         return response

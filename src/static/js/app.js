@@ -8,6 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const logEntries = document.getElementById('log-entries');
     const fpsDisplay = document.getElementById('fps-display');
     const timestampEl = document.getElementById('timestamp');
+    const fabAsk = document.getElementById('fab-ask-ai');
+    const askModal = document.getElementById('ask-modal');
+    const modalClose = document.getElementById('modal-close');
+    const modalInput = document.getElementById('modal-input');
+    const modalSend = document.getElementById('modal-send-btn');
+    const modalAnswer = document.getElementById('modal-answer');
 
     // --- Config ---
     const POLL_INTERVAL = 500; // ms
@@ -16,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State ---
     let lastLogHash = "";
     let lastDetectionsHash = "";
+    let guidancePaused = false;
+
 
     // --- FPS tracker ---
     let lastPollTime = performance.now();
@@ -162,8 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Render LLM Guidance ---
-    function renderGuidance(text) {
+    function renderGuidance(text, force = false) {
         if (!llmOutput) return;
+        if (guidancePaused && !force) return;
 
         // If text is same as existing content, skip (basic check)
         const currentText = llmOutput.textContent.trim();
@@ -241,6 +250,56 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Init ---
     addLocalLog('Dashboard initialized');
     addLocalLog('Connecting to detection service...');
+
+    // --- Ask AI Logic (Modal) ---
+    if (fabAsk && askModal) {
+        // Open
+        fabAsk.addEventListener('click', () => {
+            askModal.classList.remove('hidden');
+            setTimeout(() => modalInput.focus(), 100);
+        });
+
+        // Close
+        const closeModal = () => {
+            askModal.classList.add('hidden');
+        };
+        modalClose.addEventListener('click', closeModal);
+        askModal.addEventListener('click', (e) => {
+            if (e.target === askModal) closeModal();
+        });
+
+        // Send
+        const handleAsk = async () => {
+            const question = modalInput.value.trim();
+            if (!question) return;
+
+            // UI Feedback
+            modalInput.value = '';
+
+            modalAnswer.innerHTML = '<span class="material-symbols-rounded" style="font-size:16px; vertical-align:middle; animation:spin 1s linear infinite;">sync</span> Thinking...';
+            modalAnswer.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const data = await res.json();
+
+                modalAnswer.innerHTML = `<strong>Memory:</strong> ${data.answer}`;
+
+            } catch (e) {
+                console.error(e);
+                modalAnswer.textContent = "Error asking memory.";
+            }
+        };
+
+        modalSend.addEventListener('click', handleAsk);
+        modalInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleAsk();
+        });
+    }
 
     // Start polling
     setInterval(fetchStatus, POLL_INTERVAL);
