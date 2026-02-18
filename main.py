@@ -5,9 +5,7 @@ from src.camera import CameraFeed
 from src.detector import ObjectDetector
 from src.reasoner import SceneReasoner
 from src.audio import AudioFeedback
-
 import threading
-
 import logging
 import time
 

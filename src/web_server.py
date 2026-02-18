@@ -37,6 +37,7 @@ current_detections = []
 latest_frame = None
 latest_llm_response = "Welcome. System is listening."  # Store the latest LLM text
 system_status = "Initializing..."
+current_fps = 0
 lock = threading.Lock()
 
 def get_camera():
@@ -98,7 +99,7 @@ def get_recent_logs(n=20):
 
 # Background Task for Detection
 def detection_loop():
-    global current_detections, system_status, latest_frame, latest_llm_response
+    global current_detections, system_status, latest_frame, latest_llm_response, current_fps
     
     cam = get_camera()
     det = get_detector()
@@ -109,6 +110,7 @@ def detection_loop():
     frame_count = 0
     
     print("Starting Detection Loop...")
+    last_loop_time = time.time()
     
     while True:
         try:
@@ -135,6 +137,15 @@ def detection_loop():
                         aud.speak(message)
             
             frame_count += 1
+            
+            # FPS Calculation
+            current_time = time.time()
+            elapsed = current_time - last_loop_time
+            if elapsed > 0:
+                fps = 1.0 / elapsed
+                current_fps = 0.9 * current_fps + 0.1 * fps # Smoothing
+            last_loop_time = current_time
+
             time.sleep(0.01) # Small sleep to prevent tight loop
             
         except Exception as e:
@@ -189,10 +200,10 @@ async def video_feed():
 
 @app.get("/api/status")
 async def get_status():
-    print(f"API Sending LLM: {latest_llm_response}")
     return JSONResponse({
         "status": system_status,
         "detections": current_detections,
+        "fps": int(current_fps),
         "llm_response": latest_llm_response,
         "logs": get_recent_logs()
     })

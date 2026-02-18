@@ -19,14 +19,14 @@ except ImportError:
 # Use integer 0 for webcam, or string URL for IP Camera
 # RTSP Stream URL with Authentication
 # REPLACE 'user' and 'password' with your real camera credentials
-CAMERA_ID = "rtsp://admin:admin@192.168.1.112:8554/live"
-# CAMERA_ID = 0
+# CAMERA_ID = "rtsp://admin:admin@192.168.1.112:8554/live"
+CAMERA_ID = 0
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 FPS = 30
 
 # Detection Settings
-MODEL_PATH = "yolov8n.pt"  # Will be downloaded automatically by ultralytics
+MODEL_PATH = "yolo26n.pt"  # Will be downloaded automatically by ultralytics
 CONFIDENCE_THRESHOLD = 0.5
 DETECTION_INTERVAL = 30  # Run detection every N frames to save resources
 

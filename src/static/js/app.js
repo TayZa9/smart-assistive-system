@@ -58,6 +58,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update LLM guidance (graceful fallback)
             renderGuidance(data.llm_response || data.guidance || null);
 
+            // Update FPS display from backend
+            if (data.fps !== undefined) {
+                if (fpsDisplay) fpsDisplay.textContent = `${data.fps} FPS`;
+            }
+
             // Update reports
             const logCount = data.logs ? data.logs.length : 0;
             // Diagnostic logging (comment out for production)
