@@ -14,6 +14,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalInput = document.getElementById('modal-input');
     const modalSend = document.getElementById('modal-send-btn');
     const modalAnswer = document.getElementById('modal-answer');
+    const modalMicBtn = document.getElementById('modal-mic-btn');
+    const overlayToggle = document.getElementById('overlay-toggle');
+
+    // Auth & Profile
+    const loginOverlay = document.getElementById('login-overlay');
+    const appContent = document.getElementById('app-content');
+    const systemToggle = document.getElementById('system-toggle');
+    const sysToggleIcon = document.getElementById('sys-toggle-icon');
+    const userAvatar = document.getElementById('user-avatar');
+    const userNameDisplay = document.getElementById('user-name-display');
+    const btnManageFaces = document.getElementById('btn-manage-faces');
+
+    // Faces Modal
+    const facesModal = document.getElementById('faces-modal');
+    const facesClose = document.getElementById('faces-close');
+    const faceNameInput = document.getElementById('face-name-input');
+    const faceFileInput = document.getElementById('face-file-input');
+    const btnUploadFace = document.getElementById('btn-upload-face');
+    const facesList = document.getElementById('faces-list');
 
     // --- Config ---
     const POLL_INTERVAL = 500; // ms
@@ -51,10 +70,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
 
-            // Connection state
+            // Connection and Activation state
             statusText.textContent = data.status || 'Connected';
-            statusBadge.classList.add('connected');
-            statusBadge.classList.remove('error');
+
+            if (systemToggle) {
+                // Ensure the switch matches the backend state, but don't fire events
+                if (systemToggle.checked !== data.system_active) {
+                    systemToggle.checked = data.system_active;
+                }
+            }
+            if (sysToggleIcon) {
+                sysToggleIcon.style.color = data.system_active ? 'var(--success)' : 'var(--text-muted)';
+            }
+
+            if (data.status === 'Running') {
+                statusBadge.classList.add('connected');
+                statusBadge.classList.remove('error');
+            } else {
+                statusBadge.classList.remove('connected');
+                statusBadge.classList.add('error'); // Yellow/Gray actually
+            }
 
             // Update detections (with simple dedupe)
             const detHash = JSON.stringify(data.detections || []);
@@ -247,20 +282,189 @@ document.addEventListener('DOMContentLoaded', () => {
         logEntries.scrollTop = logEntries.scrollHeight;
     }
 
-    // --- Init ---
-    addLocalLog('Dashboard initialized');
+    // --- Helper ---
+    async function setBackendAudioMute(muted) {
+        try {
+            await fetch('/api/audio/state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ muted: muted })
+            });
+        } catch (e) {
+            console.error("Failed to set audio state:", e);
+        }
+    }
+
+    // --- Setup Authentication ---
+    async function checkAuth() {
+        try {
+            const res = await fetch('/api/user/me');
+            if (res.ok) {
+                const user = await res.json();
+                if (loginOverlay) loginOverlay.style.display = 'none';
+                if (appContent) appContent.style.display = 'flex';
+
+                userNameDisplay.textContent = user.name;
+                if (user.avatar_url) {
+                    userAvatar.src = user.avatar_url;
+                } else {
+                    // Generate initials
+                    const nameParts = user.name.trim().split(' ');
+                    let initials = nameParts[0].charAt(0).toUpperCase();
+                    if (nameParts.length > 1) {
+                        initials += nameParts[nameParts.length - 1].charAt(0).toUpperCase();
+                    }
+
+                    userAvatar.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="%236366f1"/><text y="52%" x="50%" font-size="45" font-family="sans-serif" font-weight="600" fill="white" dominant-baseline="middle" text-anchor="middle">${initials}</text></svg>`;
+                }
+
+                // Load Settings
+                if (user.settings_json) {
+                    try {
+                        const settings = JSON.parse(user.settings_json);
+                        if (overlayToggle) {
+                            overlayToggle.checked = settings.show_overlays;
+                        }
+                    } catch (e) { }
+                }
+
+                // Dashboard processes run automatically (polling, etc.)
+            } else {
+                window.location.href = '/login';
+            }
+        } catch (e) {
+            console.error("Auth check failed", e);
+            window.location.href = '/login';
+        }
+    }
+
+    // --- System Control ---
+    if (systemToggle) {
+        systemToggle.addEventListener('change', async (e) => {
+            const isActive = e.target.checked;
+            try {
+                const res = await fetch('/api/system/state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ active: isActive })
+                });
+                if (!res.ok) throw new Error("Failed to set state");
+                addLocalLog(`System ${isActive ? 'Started' : 'Stopped'}.`);
+            } catch (err) {
+                console.error("Failed to change system state:", err);
+                // Revert toggle if failed
+                systemToggle.checked = !isActive;
+            }
+        });
+    }
+
+    // --- Faces Management ---
+    async function loadFaces() {
+        try {
+            const res = await fetch('/api/faces');
+            if (res.ok) {
+                const faces = await res.json();
+                facesList.innerHTML = '';
+                if (faces.length === 0) {
+                    facesList.innerHTML = '<p style="color: #a0a0b0; text-align: center; padding: 1rem;">No faces added yet.</p>';
+                    return;
+                }
+                faces.forEach(f => {
+                    const div = document.createElement('div');
+                    div.className = 'face-item';
+                    div.innerHTML = `
+                        <span><strong>${f.name}</strong></span>
+                        <button class="btn-delete-face" data-id="${f.id}" title="Delete"><span class="material-symbols-rounded">delete</span></button>
+                    `;
+                    facesList.appendChild(div);
+                });
+
+                // Bind delete buttons
+                document.querySelectorAll('.btn-delete-face').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const id = e.currentTarget.getAttribute('data-id');
+                        await fetch(`/api/faces/${id}`, { method: 'DELETE' });
+                        loadFaces();
+                    });
+                });
+            }
+        } catch (e) { console.error("Failed to load faces", e); }
+    }
+
+    if (btnManageFaces && facesModal && facesClose) {
+        btnManageFaces.addEventListener('click', () => {
+            facesModal.classList.remove('hidden');
+            loadFaces();
+        });
+        facesClose.addEventListener('click', () => {
+            facesModal.classList.add('hidden');
+        });
+    }
+
+    if (btnUploadFace) {
+        btnUploadFace.addEventListener('click', async () => {
+            const name = faceNameInput.value.trim();
+            const file = faceFileInput.files[0];
+            if (!name || !file) {
+                alert("Please provide both a name and an image file.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('file', file);
+
+            btnUploadFace.disabled = true;
+            btnUploadFace.textContent = "Uploading...";
+
+            try {
+                const res = await fetch('/api/faces', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (res.ok) {
+                    faceNameInput.value = '';
+                    faceFileInput.value = '';
+                    loadFaces();
+                } else {
+                    alert("Upload failed.");
+                }
+            } catch (e) {
+                console.error("Upload Error", e);
+            } finally {
+                btnUploadFace.disabled = false;
+                btnUploadFace.innerHTML = '<span class="material-symbols-rounded">upload</span> Upload';
+            }
+        });
+    }
+
+    if (overlayToggle) {
+        overlayToggle.addEventListener('change', async (e) => {
+            try {
+                await fetch('/api/settings/overlays', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                addLocalLog(`Detection overlays ${show ? 'enabled' : 'disabled'}.`);
+            } catch (err) {
+                console.error("Error toggling overlays:", err);
+            }
+        });
+    }
     addLocalLog('Connecting to detection service...');
 
     // --- Ask AI Logic (Modal) ---
     if (fabAsk && askModal) {
         // Open
         fabAsk.addEventListener('click', () => {
+            setBackendAudioMute(true);
             askModal.classList.remove('hidden');
             setTimeout(() => modalInput.focus(), 100);
         });
 
         // Close
         const closeModal = () => {
+            setBackendAudioMute(false);
             askModal.classList.add('hidden');
         };
         modalClose.addEventListener('click', closeModal);
@@ -289,6 +493,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 modalAnswer.innerHTML = `<strong>Memory:</strong> ${data.answer}`;
 
+                // TTS (Text to Speech)
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel(); // Stop any ongoing speech
+                    const utterance = new SpeechSynthesisUtterance(data.answer);
+                    window.speechSynthesis.speak(utterance);
+                }
+
             } catch (e) {
                 console.error(e);
                 modalAnswer.textContent = "Error asking memory.";
@@ -299,8 +510,52 @@ document.addEventListener('DOMContentLoaded', () => {
         modalInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleAsk();
         });
+
+        // --- STT (Speech to Text) Setup ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition && modalMicBtn) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                modalMicBtn.classList.add('listening');
+                modalInput.placeholder = 'Listening...';
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                modalInput.value = transcript;
+                handleAsk(); // Auto-submit after voice input
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech recognition error:", event.error);
+                modalMicBtn.classList.remove('listening');
+                modalInput.placeholder = 'e.g., "Where are my keys?"';
+            };
+
+            recognition.onend = () => {
+                modalMicBtn.classList.remove('listening');
+                modalInput.placeholder = 'e.g., "Where are my keys?"';
+            };
+
+            modalMicBtn.addEventListener('click', () => {
+                if (modalMicBtn.classList.contains('listening')) {
+                    recognition.stop();
+                } else {
+                    recognition.start();
+                }
+            });
+        } else if (modalMicBtn) {
+            modalMicBtn.style.display = 'none'; // Hide if not supported
+        }
     }
 
-    // Start polling
+    // Check auth and initialize on load
+    checkAuth();
+
+    // Start polling status
     setInterval(fetchStatus, POLL_INTERVAL);
 });

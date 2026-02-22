@@ -40,6 +40,12 @@ TTS_VOLUME = 1.0
 # If you want to use a real LLM, set logic in llm_service.py to use this key.
 USE_LLM = True 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# Authentication Settings
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-default-key-for-dev") # For Starlette Session
+
 LLM_COOLDOWN = 15.0 # Seconds between LLM calls to avoid Rate Limits (Free Tier)
 
 # Advanced Settings

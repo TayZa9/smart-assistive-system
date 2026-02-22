@@ -10,3 +10,8 @@ python-multipart
 google-genai
 python-dotenv
 Pillow
+face_recognition
+authlib
+sqlalchemy
+httpx
+itsdangerous

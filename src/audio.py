@@ -7,13 +7,19 @@ class AudioFeedback:
     def __init__(self):
         self.q = queue.Queue()
         self.stopped = False
+        self.muted = False
         
         # Start processing thread
         t = threading.Thread(target=self.worker)
         t.daemon = True
         t.start()
+        
+    def clear_queue(self):
+        with self.q.mutex:
+            self.q.queue.clear()
 
     def speak(self, text):
+        if self.muted: return
         # We assume if new text comes, it's relevant.
         # Check if queue already has similar item?
         if self.q.qsize() < 2: # Don't build up a huge backlog

@@ -3,6 +3,7 @@ import time
 import logging
 import threading
 import io
+import os
 import cv2
 import numpy as np
 from PIL import Image
@@ -32,8 +33,6 @@ class LLMService:
         if genai and config.GOOGLE_API_KEY:
             try:
                 self.client = genai.Client(api_key=config.GOOGLE_API_KEY)
-                # We don't need to "configure" or create a "model" object like before
-                # We just hold the client and specify model name during generation
                 self.model_name = 'gemini-2.0-flash' 
             except Exception as e:
                 logging.error(f"Failed to init Gemini Client: {e}")
@@ -43,6 +42,8 @@ class LLMService:
             print("⚠️ google-genai library not installed.")
         else:
             logging.warning("No Google API Key found. LLM features disabled.")
+
+
 
         # Initialize VectorStore in background to not block startup if slow
         self.vector_store = None
@@ -55,7 +56,7 @@ class LLMService:
         except Exception as e:
             logging.error(f"VectorStore init failed: {e}")
 
-    def generate_response(self, metadata_json, image_data=None, target_language=config.TARGET_LANGUAGE):
+    def generate_response(self, metadata_json, image_data=None, target_language=config.TARGET_LANGUAGE, user_id=None):
         """
         Generates a spoken response from the LLM based on metadata and optional image using Google Gemini.
         """
@@ -90,19 +91,46 @@ class LLMService:
 
         # Construct Prompt
         object_descriptions = []
+        contains_person = False
+        
         for obj in objects:
             desc = f"- {obj['label']} at {obj['position']} (distance: {obj['distance']})"
             if obj['is_dangerous']: desc += " [DANGEROUS]"
             object_descriptions.append(desc)
+            if 'person' in obj['label'].lower():
+                contains_person = True
         
         context_str = "\\n".join(object_descriptions) if object_descriptions else "No specific objects detected by basic sensors."
 
-        prompt = (
+        prompt_prefix = (
             f"You are an assistive vision assistant for a visually impaired user. "
             f"I will provide an image of what is in front of the user, and a list of objects detected by sensors.\\n"
+        )
+        
+        user_faces = []
+        if contains_person and user_id:
+            from src.database import SessionLocal, ReferenceFace
+            db = SessionLocal()
+            try:
+                faces = db.query(ReferenceFace).filter(ReferenceFace.user_id == user_id).all()
+                for face in faces:
+                    if os.path.exists(face.file_path):
+                        try:
+                            img = Image.open(face.file_path)
+                            img.load()
+                            user_faces.append({"name": face.name, "image": img})
+                        except Exception as e:
+                            logging.error(f"Failed to load user face {face.file_path}: {e}")
+            finally:
+                db.close()
+                
+        if contains_person and user_faces:
+            prompt_prefix += "I've also provided reference images of known people. Compare any faces in the main image to these references. If you recognize them, refer to them by name. Explicitly describe their emotion or expressions.\\n"
+
+        prompt_body = (
             f"Sensor Detections:\\n{context_str}\\n\\n"
-            f"Task: Analyze the image and the detections. Provide a helpful, safety-focused spoken notification in {target_language}. "
-            f"If there is text in the image, read it if relevant. Describe important details that sensors might miss (e.g., floor hazards, traffic lights, specific items). "
+            f"Task: Analyze the main image and the detections. Provide a helpful, safety-focused spoken notification in {target_language}. "
+            f"If there is text in the image, read it if relevant. Describe important details that sensors might miss. "
             f"Strictly follow this format: 'There is [description]. [Navigational guidance]'. "
             f"Keep it concise, under 2 sentences. Prioritize immediate safety hazards."
         )
@@ -110,13 +138,23 @@ class LLMService:
         # Call Gemini (Multimodal)
         if self.client:
             try:
-                contents = [prompt]
+                contents = []
+                
+                # Prepend reference faces if a person is in the scene
+                if contains_person and user_faces:
+                    for kf in user_faces:
+                        contents.append(f"Reference Image: {kf['name']}")
+                        contents.append(kf['image'])
+                
+                contents.append(prompt_prefix + prompt_body)
+                
                 if image_data is not None:
                     # Convert numpy array (OpenCV) to PIL Image
                     if isinstance(image_data, np.ndarray):
                         # OpenCV is BGR, PIL needs RGB
                         img_rgb = cv2.cvtColor(image_data, cv2.COLOR_BGR2RGB)
                         pil_img = Image.fromarray(img_rgb)
+                        contents.append("Main Image:")
                         contents.append(pil_img)
                     else:
                         logging.warning("Image data provided but not a numpy array. Skipping image.")
